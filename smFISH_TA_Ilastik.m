@@ -1,9 +1,10 @@
 clear; clc; close all;
 
-sizeCell = 50;
-diameter = 20;
-pxSize = 130;
-thresh = 0.9;
+sizeCell = 50; % minimum size of cell to be considered as a cell
+diameter = 20; % size of image to crop per detected mNG/RFP
+pxSize = 130; % camera/miscrope pixel size
+thresh = 0.9; % threshhold for computing blobs for SNAP
+locDefine = 390; % RFP and mNG has to be less than this distance to be local
 
 dirPath = uigetdir;
 fileList = dir([dirPath, filesep, '*_Simple Segmentation.h5']);
@@ -72,9 +73,12 @@ for n = 1 : length(fileList)
           % Export the region of interest to analyse with different package if needed
 %           imwrite(imgs(:,:,j)/ max(max(imgs(:,:,j))), [dirPath, filesep, fileList(n).name(1:end-(23 + strlength(chns(mainChns)))), convertStringsToChars(chns(j)), '_FOV.tif'])
         end
+        % Threshhold the image and select the blobs
         imgI = imgs(:, :, chnsI) > (max(max(imgs(:, :, chnsI))) * thresh);
         imgI = imgs(:, :, chnsI) .* imgI;
         [imgI, dets] = bwlabel(imgI);
+
+        % Compute minimum distance between blob detected in SNAP and mNG
         [xT, yT] = find(imgs(:, :, mainChns) == max(max(imgs(:, :, mainChns))));
         xT = mean(xT); yT = mean(yT);
         mindist = (diameter + 1) * pxSize;
@@ -86,7 +90,16 @@ for n = 1 : length(fileList)
             mindist = dist;
           end
         end
-        sol = [sol;  {fileList(n).name(1:end-(23 + strlength(chns(mainChns))))}, mindist];
+
+        % Check for presence of RFP
+        chnR = 1 : length(chns); chnR([mainChns, chnsI]) = [];
+        [xR, yR] = find(imgs(:, :, chnR) == max(max(imgs(:, :, chnR))));
+        dist = sqrt((xT - xR) ^ 2 + (yT - yR) ^ 2) * pxSize;
+        isLoc = 0;
+        if dist < locDefine
+          isLoc = 1;
+        end
+        sol = [sol;  {fileList(n).name(1:end-(23 + strlength(chns(mainChns))))}, isLoc, mindist];
 %         imtool(imgs(:,:,1))
 %         imshow(imgs(:,:,1) / max(max(imgs(:,:,1))))
       end
